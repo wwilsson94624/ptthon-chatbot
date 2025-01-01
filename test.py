@@ -9,7 +9,6 @@ template = """
 1. 根據 BMI 提供建議。
 2. 根據健身目標（如增肌、減脂、耐力提升）生成個性化健身計畫。
 3. 提供飲食建議或動作指導。
-4. 回應問候語，例如「早安」等日常問候。
 
 用戶的對話內容如下：
 {history}
@@ -34,40 +33,31 @@ class FitnessAssistant:
     def chat(self, user_input):
         """處理用戶輸入，返回生成的回應"""
         try:
-            # 日常問候的簡單處理
-            if "早安" in user_input or "你好" in user_input:
-                return "早安！有什麼我可以幫助你的嗎？"
-            
-            # 根據健身目標生成個性化健身計劃
-            if "增肌" in user_input:
-                return "為了增肌，你需要重視力量訓練，每週進行至少 3 次的重量訓練。高蛋白飲食，增加熱量攝入，以支持肌肉生長。"
-            elif "減脂" in user_input:
-                return "減脂需要有氧運動和飲食控制。建議每週進行至少 4 次有氧運動，並保持適度的熱量赤字。"
-            elif "耐力提升" in user_input:
-                return "耐力提升需要長時間的有氧訓練，如慢跑、游泳或自行車等。每週 3 至 4 次中長時間的有氧運動是必要的。"
-
-            # 提供飲食建議
-            if "飲食" in user_input:
-                return "健身期間的飲食非常重要，建議每餐包含優質蛋白、碳水化合物和健康脂肪。增肌者應增加蛋白質的攝取，減脂者需要注意控制碳水化合物的量。"
-
-            # 提供動作指導
-            if "動作" in user_input or "練習" in user_input:
-                return "常見的健身動作包括深蹲、硬拉、推舉等。每個動作都應該注意正確的姿勢和適當的負重，避免受傷。"
-
             # 整理歷史記憶作為對話上下文
-            history = "\n".join([f"用戶: {msg.content}" if msg.type == "human" else f"助手: {msg.content}" for msg in self.memory.chat_memory.messages])
-
-            # 格式化 Prompt
-            formatted_prompt = self.prompt.format(history=history, input=user_input)
-
-            # 與 Ollama 交互
-            response = self.ollama_client.generate(model="fit-coach", prompt=formatted_prompt)
-            reply = response.get("content", "抱歉，我無法理解你的請求。")
-
+            history = "\n".join([
+                f"用戶: {msg.content}" if msg.type == "human" else f"助手: {msg.content}"
+                for msg in self.memory.chat_memory.messages
+            ])
+            
+            # 針對健身目標進行特殊處理
+            if "增肌" in user_input:
+                reply = "增肌的關鍵是負重訓練與高蛋白飲食。每週應該進行3-5次重量訓練，並確保飲食中有足夠的蛋白質。"
+            elif "減脂" in user_input:
+                reply = "減脂的重點在於創造熱量赤字，結合有氧運動和力量訓練，並注意飲食控制，少吃高糖高脂肪的食物。"
+            elif "耐力" in user_input or "提升" in user_input:
+                reply = "提升耐力需要進行長時間的有氧訓練，如跑步、游泳或騎車，每週持續練習2-3次，每次至少30分鐘。"
+            else:
+                # 如果沒有匹配到特定目標，則使用原來的對話生成邏輯
+                formatted_prompt = self.prompt.format(history=history, input=user_input)
+                
+                # 使用 Llama 3.2 模型生成回應
+                response = self.ollama_client.generate(model="llama3.2", prompt=formatted_prompt)
+                reply = response.get("content", "抱歉，我無法理解你的請求。")
+            
             # 保存對話記憶
             self.memory.chat_memory.add_user_message(user_input)
             self.memory.chat_memory.add_ai_message(reply)
-
+            
             return reply
         except Exception as e:
             return f"系統錯誤：{e}"
