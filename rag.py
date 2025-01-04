@@ -72,10 +72,12 @@ def calculate_bmi(weight, height):
 def initialize_knowledge_base(file_path):
     """初始化知識庫"""
     try:
-        with open(file_path, 'r', encoding='utf-8') as file:
+        with open(file_path, "r", encoding='utf-8') as file:
             data = file.read()
     except FileNotFoundError:
-        print("檔案不存在，請檢查路徑是否正確。")
+        print("檔案不存在")
+    except Exception as e:
+        print(f"發生錯誤：{e}")
     
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     docs = text_splitter.split_text(data)
