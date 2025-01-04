@@ -2,8 +2,12 @@ import speech_recognition as sr
 import pyttsx3
 from langchain_ollama import OllamaLLM  # 使用 OllamaLLM
 from langchain.prompts import PromptTemplate
-from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
+
+
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import OpenAIEmbeddings
+
+
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.chains import RetrievalQA
 import re
@@ -71,8 +75,11 @@ def calculate_bmi(weight, height):
 
 def initialize_knowledge_base(file_path):
     """初始化知識庫"""
-    with open(file_path, 'r', encoding='utf-8') as file:
-        data = file.read()
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            data = file.read()
+    except FileNotFoundError:
+        print("檔案不存在，請檢查路徑是否正確。")
     
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     docs = text_splitter.split_text(data)
@@ -100,7 +107,7 @@ def main():
     speak("歡迎使用個性化健身計畫生成器。請提供您的體重和身高。")
 
     # 初始化知識庫
-    knowledge_base = initialize_knowledge_base("fitness_knowledge_extended.txt")
+    knowledge_base = initialize_knowledge_base('fitness_knowledge.txt')
     retriever = knowledge_base.as_retriever()
 
     # 獲取體重
