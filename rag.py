@@ -2,12 +2,8 @@ import speech_recognition as sr
 import pyttsx3
 from langchain_ollama import OllamaLLM  # 使用 OllamaLLM
 from langchain.prompts import PromptTemplate
-
-
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenAIEmbeddings
-
-
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.chains import RetrievalQA
 import re
