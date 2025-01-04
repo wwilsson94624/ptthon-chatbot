@@ -97,8 +97,8 @@ def main():
     # 生成健身計畫
     fitness_plan = get_fitness_plan(goal, weight, height)
     speak("根據您的需求，我為您生成了以下健身計畫：")
-    speak(fitness_plan)
     print(fitness_plan)
+    speak(fitness_plan)
 
 # 運行主程式
 if __name__ == "__main__":
