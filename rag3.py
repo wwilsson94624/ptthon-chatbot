@@ -56,12 +56,16 @@ def calculate_bmi(weight, height):
     """Calculate BMI and provide suggestions."""
     bmi = weight / (height / 100) ** 2
     if bmi < 18.5:
+        return f"Your BMI is {bmi:.1f}, which is underweight. Consider a muscle gain and balanced diet plan."
         return f"Your BMI is {bmi:.1f}, which is underweight. Consider a muscle gain and balanced diet plan.", bmi
     elif 18.5 <= bmi < 24.9:
+        return f"Your BMI is {bmi:.1f}, which is normal. Set further fitness goals!"
         return f"Your BMI is {bmi:.1f}, which is normal. Set further fitness goals!", bmi
     elif 25 <= bmi < 29.9:
+        return f"Your BMI is {bmi:.1f}, which is overweight. Consider a weight loss plan and dietary control."
         return f"Your BMI is {bmi:.1f}, which is overweight. Consider a weight loss plan and dietary control.", bmi
     else:
+        return f"Your BMI is {bmi:.1f}, which is obese. Please consult with a professional for a health strategy."
         return f"Your BMI is {bmi:.1f}, which is obese. Please consult with a professional for a health strategy.", bmi
 
 def get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model):
@@ -70,8 +74,11 @@ def get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model):
     retrieved_info = retrieve_best_match(query, db, chat_model)
     fitness_plan = f"Retrieved context: {retrieved_info}\n\nGoal-specific plan: "
 
+def get_fitness_plan(goal, weight, height):
+    """Generate a personalized fitness plan using LLM."""
     llm = OllamaLLM(model="llama3.2")
     template = """
+    Generate a personalized fitness plan based on the following information:
     Based on the following retrieved information and user data, generate a personalized fitness plan:
     {retrieved_info}
     
@@ -82,6 +89,9 @@ def get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model):
 
     Provide professional advice, including workout plans, recommended exercises, and dietary suggestions.
     """
+    prompt = PromptTemplate(input_variables=["goal", "weight", "height"], template=template)
+    response = llm.invoke(prompt.format(goal=goal, weight=weight, height=height))
+    return response
     prompt = PromptTemplate(input_variables=["retrieved_info", "goal", "weight", "height", "bmi"], template=template)
     response = llm.invoke(prompt.format(retrieved_info=retrieved_info, goal=goal, weight=weight, height=height, bmi=bmi))
     return fitness_plan + response
@@ -111,6 +121,7 @@ def retrieve_best_match(query, db, chat_model):
 def main():
     """Main program logic."""
     speak("Welcome to the Personalized Fitness Plan Generator.")
+    speak("Please provide your weight in kilograms.")
     speak("Now, let's enhance your experience with document retrieval.")
 
     file_path = 'rag1.txt'  # Replace with the path to your document
@@ -135,17 +146,18 @@ def main():
         speak("Invalid height input. Please enter a numeric value.")
         return
 
+    bmi_suggestion = calculate_bmi(weight, height)
     bmi_suggestion, bmi = calculate_bmi(weight, height)
     speak(bmi_suggestion)
 
     speak("Please tell me your fitness goal, such as muscle gain, weight loss, or endurance improvement.")
     goal = get_chinese_input()
 
+    fitness_plan = get_fitness_plan(goal, weight, height)
     fitness_plan = get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model)
     speak("Here is your personalized fitness plan:")
     print(fitness_plan)
 
-<<<<<<< HEAD
     speak("Now, let's enhance your experience with document retrieval.")
 
     file_path = 'fitness_knowledge.txt'  # Replace with the path to your document
@@ -158,7 +170,5 @@ def main():
     speak("Here is the result of your query:")
     print(response)
 
-=======
->>>>>>> 66c0add12d60d055b5aa64b5f864b3cca6cd5916
 if __name__ == "__main__":
     main()
