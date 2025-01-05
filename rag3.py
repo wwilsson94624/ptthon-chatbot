@@ -56,30 +56,20 @@ def calculate_bmi(weight, height):
     """Calculate BMI and provide suggestions."""
     bmi = weight / (height / 100) ** 2
     if bmi < 18.5:
-        return f"Your BMI is {bmi:.1f}, which is underweight. Consider a muscle gain and balanced diet plan."
-        return f"Your BMI is {bmi:.1f}, which is underweight. Consider a muscle gain and balanced diet plan.", bmi
+        suggestion = f"Your BMI is {bmi:.1f}, which is underweight. Consider a muscle gain and balanced diet plan."
     elif 18.5 <= bmi < 24.9:
-        return f"Your BMI is {bmi:.1f}, which is normal. Set further fitness goals!"
-        return f"Your BMI is {bmi:.1f}, which is normal. Set further fitness goals!", bmi
+        suggestion = f"Your BMI is {bmi:.1f}, which is normal. Set further fitness goals!"
     elif 25 <= bmi < 29.9:
-        return f"Your BMI is {bmi:.1f}, which is overweight. Consider a weight loss plan and dietary control."
-        return f"Your BMI is {bmi:.1f}, which is overweight. Consider a weight loss plan and dietary control.", bmi
+        suggestion = f"Your BMI is {bmi:.1f}, which is overweight. Consider a weight loss plan and dietary control."
     else:
-        return f"Your BMI is {bmi:.1f}, which is obese. Please consult with a professional for a health strategy."
-        return f"Your BMI is {bmi:.1f}, which is obese. Please consult with a professional for a health strategy.", bmi
+        suggestion = f"Your BMI is {bmi:.1f}, which is obese. Please consult with a professional for a health strategy."
+    return suggestion, bmi
 
-def get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model):
-    """Generate a personalized fitness plan using RAG and LLM."""
-    query = f"Generate a fitness plan for a person with weight {weight}kg, height {height}cm, BMI {bmi:.1f}, and goal {goal}."
-    retrieved_info = retrieve_best_match(query, db, chat_model)
-    fitness_plan = f"Retrieved context: {retrieved_info}\n\nGoal-specific plan: "
-
-def get_fitness_plan(goal, weight, height):
+def get_fitness_plan(goal, weight, height, bmi, retrieved_info=""):
     """Generate a personalized fitness plan using LLM."""
     llm = OllamaLLM(model="llama3.2")
     template = """
     Generate a personalized fitness plan based on the following information:
-    Based on the following retrieved information and user data, generate a personalized fitness plan:
     {retrieved_info}
     
     - Weight: {weight} kg
@@ -89,12 +79,11 @@ def get_fitness_plan(goal, weight, height):
 
     Provide professional advice, including workout plans, recommended exercises, and dietary suggestions.
     """
-    prompt = PromptTemplate(input_variables=["goal", "weight", "height"], template=template)
-    response = llm.invoke(prompt.format(goal=goal, weight=weight, height=height))
+    prompt = PromptTemplate(input_variables=["retrieved_info", "weight", "height", "bmi", "goal"], template=template)
+    response = llm.invoke(prompt.format(
+        retrieved_info=retrieved_info, weight=weight, height=height, bmi=bmi, goal=goal
+    ))
     return response
-    prompt = PromptTemplate(input_variables=["retrieved_info", "goal", "weight", "height", "bmi"], template=template)
-    response = llm.invoke(prompt.format(retrieved_info=retrieved_info, goal=goal, weight=weight, height=height, bmi=bmi))
-    return fitness_plan + response
 
 def load_and_process_documents(file_path):
     """Load, split, and process documents for embedding."""
@@ -106,17 +95,40 @@ def load_and_process_documents(file_path):
     )
     chunks = text_splitter.split_documents(pages)
     return chunks
+from langchain.vectorstores import FAISS
+from langchain.embeddings.base import Embeddings
 
 def create_or_load_vector_db(chunks, persist_directory='db'):
-    """Create or load vector database without Chroma."""
+    """Create or load vector database."""
+    # 初始化嵌入模型
     embeddings_model = OllamaEmbeddings(model="llama3.2")
-    db = VectorstoreIndexCreator(embedding_function=embeddings_model).from_documents(chunks)
-    return db
+    
+    try:
+        # 嘗試加載現有數據庫
+        if os.path.exists(persist_directory):
+            db = FAISS.load_local(persist_directory, embeddings_model)
+            print("Loaded existing vector database.")
+        else:
+            # 創建新的數據庫
+            db = FAISS.from_documents(chunks, embeddings_model)
+            db.save_local(persist_directory)
+            print("Created and saved new vector database.")
+    except Exception as e:
+        print(f"Error initializing vector database: {e}")
+        return None
 
+    return db
 def retrieve_best_match(query, db, chat_model):
     """Retrieve the most relevant document for a query."""
-    response = db.query(llm=chat_model, question=query)
-    return response
+    try:
+        response = db.query(llm=chat_model, question=query)
+        if not response or "result" not in response:
+            return "No relevant information found."
+        return response["result"]
+    except Exception as e:
+        print(f"Error during retrieval: {e}")
+        return "Error retrieving information."
+
 
 def main():
     """Main program logic."""
@@ -124,7 +136,7 @@ def main():
     speak("Please provide your weight in kilograms.")
     speak("Now, let's enhance your experience with document retrieval.")
 
-    file_path = 'rag1.txt'  # Replace with the path to your document
+    file_path = 'fitness_knowledge.txt'  # Replace with the path to your document
     chunks = load_and_process_documents(file_path)
     db = create_or_load_vector_db(chunks)
 
@@ -146,15 +158,15 @@ def main():
         speak("Invalid height input. Please enter a numeric value.")
         return
 
-    bmi_suggestion = calculate_bmi(weight, height)
     bmi_suggestion, bmi = calculate_bmi(weight, height)
+    print(f"BMI Suggestion: {bmi_suggestion}, BMI: {bmi}")
     speak(bmi_suggestion)
 
     speak("Please tell me your fitness goal, such as muscle gain, weight loss, or endurance improvement.")
     goal = get_chinese_input()
 
-    fitness_plan = get_fitness_plan(goal, weight, height)
-    fitness_plan = get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model)
+    fitness_plan = get_fitness_plan(goal, weight, height, bmi)
+
     speak("Here is your personalized fitness plan:")
     print(fitness_plan)
 
