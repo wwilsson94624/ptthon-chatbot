@@ -1,13 +1,13 @@
-import speech_recognition as sr
-import pyttsx3
-from langchain.prompts import PromptTemplate
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.chains import RetrievalQA
-from langchain_community.llms import HuggingFaceHub
-
 import re
+import pyaudio
+from vosk import Model, KaldiRecognizer
+from langchain.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.text_splitter import CharacterTextSplitter
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
+import pyttsx3
+import numpy as np
+
 
 # 初始化文字轉語音引擎
 engine = pyttsx3.init()
@@ -17,46 +17,33 @@ def speak(text):
     engine.say(text)
     engine.runAndWait()
 
-def get_voice_input():
-    """使用語音轉文字進行用戶輸入，無限重試直到成功"""
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("請說話...")
-        while True:  # 持續重試直到成功
-            try:
-                audio = recognizer.listen(source, timeout=10)
-                text = recognizer.recognize_google(audio, language="zh-TW")
+def get_voice_input_vosk():
+    """使用 Vosk 進行語音辨識"""
+    model = Model("model")  # 請下載適合的 Vosk 中文語音模型並設置路徑
+    recognizer = KaldiRecognizer(model, 16000)
+    mic = pyaudio.PyAudio()
+    stream = mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192)
+    stream.start_stream()
+    print("請開始說話...")
+
+    while True:
+        data = stream.read(4096, exception_on_overflow=False)
+        if recognizer.AcceptWaveform(data):
+            result = eval(recognizer.Result())  # 提取語音辨識結果
+            text = result.get('text', '')
+            if text.strip():
                 print(f"您說了：{text}")
                 return text
-            except sr.UnknownValueError:
-                speak("抱歉，我無法辨識您的語音。請再試一次。")
-            except sr.RequestError:
-                speak("語音服務出現問題。請稍後再試。")
-                return None
 
 def get_chinese_input():
-    """使用語音轉文字進行用戶輸入，無限重試直到成功，且只接受中文輸入"""
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("請說話...")
-        while True:  # 持續重試直到成功
-            try:
-                audio = recognizer.listen(source, timeout=10)
-                text = recognizer.recognize_google(audio, language="zh-TW")  # 預設為中文
-                print(f"您說了：{text}")
-
-                # 檢查是否只有中文
-                if re.match(r'^[\u4e00-\u9fa5]+$', text):  # 正規表達式檢查是否只有中文字符
-                    return text
-                else:
-                    speak("請確保您只說中文。")
-                    print("請確保您只說中文。")
-                    continue  # 重新要求語音輸入
-            except sr.UnknownValueError:
-                speak("抱歉，我無法辨識您的語音。請再試一次。")
-            except sr.RequestError:
-                speak("語音服務出現問題。請稍後再試。")
-                return None
+    """使用語音辨識，並只接受中文輸入"""
+    while True:
+        text = get_voice_input_vosk()
+        if re.match(r'^[\u4e00-\u9fa5\s]+$', text):  # 確保只有中文
+            return text
+        else:
+            speak("請確保您只說中文。")
+            print("請確保您只說中文。")
 
 def calculate_bmi(weight, height):
     """計算 BMI 並給出建議"""
@@ -72,22 +59,25 @@ def calculate_bmi(weight, height):
 
 def initialize_knowledge_base(data):
     """初始化知識庫"""
-    
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     docs = text_splitter.split_text(data)
-    embeddings = OpenAIEmbeddings()
+    embeddings = HuggingFaceEmbeddings()
     knowledge_base = FAISS.from_texts(docs, embeddings)
     return knowledge_base
 
-def get_fitness_plan(goal, bmi_category, retriever):
-    """使用 RAG + HuggingFaceHub 生成個性化健身計畫"""
-    # 使用 Hugging Face Hub 模型
-    llm = HuggingFaceHub(
-        repo_id="Qwen/Qwen-7b",  # 替換為 Hugging Face 的模型
-        model_kwargs={"temperature": 0.7, "max_length": 512}
-    )
-    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
-    
+def initialize_local_llm():
+    """初始化本地的 LLM 模型"""
+    tokenizer = AutoTokenizer.from_pretrained("facebook/opt-1.3b")  # 替代模型
+    model = AutoModelForCausalLM.from_pretrained("facebook/opt-1.3b")
+    return pipeline("text-generation", model=model, tokenizer=tokenizer)
+
+def generate_local_response(llm_pipeline, query):
+    """生成本地化的模型回應"""
+    response = llm_pipeline(query, max_length=512, do_sample=True, temperature=0.7)
+    return response[0]["generated_text"]
+
+def get_fitness_plan_local(goal, bmi_category, retriever, llm_pipeline):
+    """使用本地 LLM 和檢索生成健身計畫"""
     query = f"""
     基於以下資訊生成個性化的健身計畫：
     - 健身目標：{goal}
@@ -95,7 +85,10 @@ def get_fitness_plan(goal, bmi_category, retriever):
 
     請根據背景知識給出專業建議，包括鍛煉計畫、推薦的動作，以及飲食建議。
     """
-    response = qa_chain.run(query)
+    relevant_docs = retriever.get_relevant_documents(query)
+    context = " ".join([doc.page_content for doc in relevant_docs[:5]])
+    query_with_context = f"背景知識：{context}\n\n問題：{query}"
+    response = generate_local_response(llm_pipeline, query_with_context)
     return response
 
 def main():
@@ -220,12 +213,13 @@ def main():
 
     """
     # 初始化知識庫
-    knowledge_base = initialize_knowledge_base("fitness_knowledge.txt")
+    knowledge_base = initialize_knowledge_base(file_content)
     retriever = knowledge_base.as_retriever()
+    llm_pipeline = initialize_local_llm()
 
     # 獲取體重
     speak("請告訴我您的體重，單位是公斤。")
-    weight_input = get_voice_input()
+    weight_input = get_voice_input_vosk()
     try:
         weight = float(weight_input)
     except ValueError:
@@ -234,7 +228,7 @@ def main():
 
     # 獲取身高
     speak("請告訴我您的身高，單位是公分。")
-    height_input = get_voice_input()
+    height_input = get_voice_input_vosk()
     try:
         height = float(height_input)
     except ValueError:
@@ -252,7 +246,7 @@ def main():
     goal = get_chinese_input()
 
     # 生成健身計畫
-    fitness_plan = get_fitness_plan(goal, bmi_category, retriever)
+    fitness_plan = get_fitness_plan_local(goal, bmi_category, retriever, llm_pipeline)
     speak("根據您的需求，我為您生成了以下健身計畫：")
     print(fitness_plan)
     speak(fitness_plan)
