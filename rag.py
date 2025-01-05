@@ -1,11 +1,12 @@
 import speech_recognition as sr
 import pyttsx3
 from langchain.prompts import PromptTemplate
-from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.chains import RetrievalQA
-from langchain_qlora import QwenLLM  # 替換為 QwenLLM
+from langchain_community.llms import HuggingFaceHub
+
 import re
 
 # 初始化文字轉語音引擎
@@ -81,8 +82,12 @@ def initialize_knowledge_base(file_path):
     return knowledge_base
 
 def get_fitness_plan(goal, bmi_category, retriever):
-    """使用 RAG + QwenLLM 生成個性化健身計畫"""
-    llm = QwenLLM(model="qwen-7b")  # 替換為 QwenLLM 並指定模型名稱
+    """使用 RAG + HuggingFaceHub 生成個性化健身計畫"""
+    # 使用 Hugging Face Hub 模型
+    llm = HuggingFaceHub(
+        repo_id="Qwen/Qwen-7b",  # 替換為 Hugging Face 的模型
+        model_kwargs={"temperature": 0.7, "max_length": 512}
+    )
     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
     
     query = f"""
