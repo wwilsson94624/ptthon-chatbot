@@ -1,11 +1,11 @@
 import speech_recognition as sr
 import pyttsx3
-from langchain_ollama import OllamaLLM  # 使用 OllamaLLM
 from langchain.prompts import PromptTemplate
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.embeddings import OpenAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.chains import RetrievalQA
+from langchain_qlora import QwenLLM  # 替換為 QwenLLM
 import re
 
 # 初始化文字轉語音引擎
@@ -71,13 +71,8 @@ def calculate_bmi(weight, height):
 
 def initialize_knowledge_base(file_path):
     """初始化知識庫"""
-    try:
-        with open(file_path, "r", encoding='utf-8') as file:
-            data = file.read()
-    except FileNotFoundError:
-        print("檔案不存在")
-    except Exception as e:
-        print(f"發生錯誤：{e}")
+    with open(file_path, 'r', encoding='utf-8') as file:
+        data = file.read()
     
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     docs = text_splitter.split_text(data)
@@ -86,8 +81,8 @@ def initialize_knowledge_base(file_path):
     return knowledge_base
 
 def get_fitness_plan(goal, bmi_category, retriever):
-    """使用 RAG + OllamaLLM 生成個性化健身計畫"""
-    llm = OllamaLLM(model="llama3.2")  # 使用 OllamaLLM
+    """使用 RAG + QwenLLM 生成個性化健身計畫"""
+    llm = QwenLLM(model="qwen-7b")  # 替換為 QwenLLM 並指定模型名稱
     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
     
     query = f"""
@@ -105,7 +100,7 @@ def main():
     speak("歡迎使用個性化健身計畫生成器。請提供您的體重和身高。")
 
     # 初始化知識庫
-    knowledge_base = initialize_knowledge_base('fitness_knowledge.txt')
+    knowledge_base = initialize_knowledge_base("fitness_knowledge.txt")
     retriever = knowledge_base.as_retriever()
 
     # 獲取體重
