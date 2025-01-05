@@ -139,7 +139,7 @@ def main():
     bmi_suggestion, bmi = calculate_bmi(weight, height)
     speak(bmi_suggestion)
 
-    speak("請告訴我您的健身目標，例如增肌、減重或耐力提升。")
+    speak("請告訴我您的健身目標，例如增肌、減重、減脂或耐力提升。")
     goal = get_chinese_input()
 
     fitness_plan = get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model)
