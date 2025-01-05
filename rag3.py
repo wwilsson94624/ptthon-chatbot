@@ -8,7 +8,6 @@ from langchain.prompts import PromptTemplate
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.indexes import VectorstoreIndexCreator
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_chroma.vectorstores import Chroma
 from langchain_community.document_loaders import TextLoader
 
 def speak(text):
@@ -92,17 +91,9 @@ def load_and_process_documents(file_path):
     return chunks
 
 def create_or_load_vector_db(chunks, persist_directory='db'):
-    """Create or load vector database."""
+    """Create or load vector database without Chroma."""
     embeddings_model = OllamaEmbeddings(model="llama3.2")
-    if os.path.exists(persist_directory):
-        db = Chroma(persist_directory=persist_directory, embedding_function=embeddings_model)
-    else:
-        db = Chroma.from_documents(
-            collection_name="fitness_plans",
-            documents=chunks,
-            embedding=embeddings_model,
-            persist_directory=persist_directory
-        )
+    db = VectorstoreIndexCreator(embedding_function=embeddings_model).from_documents(chunks)
     return db
 
 def retrieve_best_match(query, db, chat_model):
@@ -142,7 +133,7 @@ def main():
 
     speak("Now, let's enhance your experience with document retrieval.")
 
-    file_path = 'fitness_knowledge.txt'  # Replace with the path to your document
+    file_path = 'rag1.txt'  # Replace with the path to your document
     chunks = load_and_process_documents(file_path)
     db = create_or_load_vector_db(chunks)
 
