@@ -112,7 +112,7 @@ def retrieve_best_match(query, db, chat_model):
 def main():
     """主程式邏輯"""
     speak("歡迎使用個人化健身計劃生成器。")
-    speak("現在，讓我們透過文件檢索增強您的體驗。")
+    #speak("現在，讓我們透過文件檢索增強您的體驗。")
 
     file_path = 'fitness_knowledge.txt'  # 替換為您的文件路徑
     chunks = load_and_process_documents(file_path)
