@@ -1,32 +1,52 @@
-
-import speech_recognition as sr
-import pyttsx3
-from langchain_ollama import OllamaLLM  # 使用 OllamaLLM
-from langchain.prompts import PromptTemplate
-
-
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import OpenAIEmbeddings
-
-
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import CharacterTextSplitter
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
+from langchain_ollama import OllamaLLM
+import pyttsx3
+import speech_recognition as sr
 import re
 
-# 初始化文字轉語音引擎
+# 初始化語音引擎
 engine = pyttsx3.init()
 
 def speak(text):
-    """將文字轉換為語音"""
+    """文字轉語音輸出"""
     engine.say(text)
     engine.runAndWait()
 
+def load_document(file_path):
+    """根據檔案類型載入文件"""
+    if file_path.endswith('.pdf'):
+        loader = PyPDFLoader(file_path=file_path, extract_images=False)
+    elif file_path.endswith('.txt'):
+        loader = TextLoader(file_path=file_path, encoding="utf-8")
+    else:
+        raise ValueError("目前僅支持 PDF 或 TXT 文件格式")
+    return loader.load()
+
+def initialize_knowledge_base(file_path):
+    """初始化知識庫"""
+    try:
+        data = load_document(file_path)
+        print("文件加載成功！")
+    except Exception as e:
+        print(f"文件加載失敗：{e}")
+        return None
+
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    docs = text_splitter.split_documents(data)
+    embeddings = OpenAIEmbeddings()
+    knowledge_base = FAISS.from_documents(docs, embeddings)
+    return knowledge_base
+
 def get_voice_input():
-    """使用語音轉文字進行用戶輸入，無限重試直到成功"""
+    """使用語音識別進行用戶輸入"""
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
         print("請說話...")
-        while True:  # 持續重試直到成功
+        while True:
             try:
                 audio = recognizer.listen(source, timeout=10)
                 text = recognizer.recognize_google(audio, language="zh-TW")
@@ -35,35 +55,11 @@ def get_voice_input():
             except sr.UnknownValueError:
                 speak("抱歉，我無法辨識您的語音。請再試一次。")
             except sr.RequestError:
-                speak("語音服務出現問題。請稍後再試。")
-                return None
-
-def get_chinese_input():
-    """使用語音轉文字進行用戶輸入，無限重試直到成功，且只接受中文輸入"""
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("請說話...")
-        while True:  # 持續重試直到成功
-            try:
-                audio = recognizer.listen(source, timeout=10)
-                text = recognizer.recognize_google(audio, language="zh-TW")  # 預設為中文
-                print(f"您說了：{text}")
-
-                # 檢查是否只有中文
-                if re.match(r'^[\u4e00-\u9fa5]+$', text):  # 正規表達式檢查是否只有中文字符
-                    return text
-                else:
-                    speak("請確保您只說中文。")
-                    print("請確保您只說中文。")
-                    continue  # 重新要求語音輸入
-            except sr.UnknownValueError:
-                speak("抱歉，我無法辨識您的語音。請再試一次。")
-            except sr.RequestError:
-                speak("語音服務出現問題。請稍後再試。")
+                speak("語音服務出現問題，請稍後再試。")
                 return None
 
 def calculate_bmi(weight, height):
-    """計算 BMI 並給出建議"""
+    """計算 BMI 並返回分類"""
     bmi = weight / (height / 100) ** 2
     if bmi < 18.5:
         return bmi, "過輕"
@@ -74,23 +70,9 @@ def calculate_bmi(weight, height):
     else:
         return bmi, "肥胖"
 
-def initialize_knowledge_base(file_path):
-    """初始化知識庫"""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            data = file.read()
-    except FileNotFoundError:
-        print("檔案不存在，請檢查路徑是否正確。")
-    
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    docs = text_splitter.split_text(data)
-    embeddings = OpenAIEmbeddings()
-    knowledge_base = FAISS.from_texts(docs, embeddings)
-    return knowledge_base
-
 def get_fitness_plan(goal, bmi_category, retriever):
-    """使用 RAG + OllamaLLM 生成個性化健身計畫"""
-    llm = OllamaLLM(model="llama3.2")  # 使用 OllamaLLM
+    """生成健身計畫"""
+    llm = OllamaLLM(model="llama3.2")
     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
     
     query = f"""
@@ -104,11 +86,15 @@ def get_fitness_plan(goal, bmi_category, retriever):
     return response
 
 def main():
-    """主程式邏輯"""
+    """主程式"""
     speak("歡迎使用個性化健身計畫生成器。請提供您的體重和身高。")
-
+    
     # 初始化知識庫
-    knowledge_base = initialize_knowledge_base('fitness_knowledge.txt')
+    file_path = 'fitness_knowledge.txt'  # 或 'rag1.pdf'
+    knowledge_base = initialize_knowledge_base(file_path)
+    if not knowledge_base:
+        speak("知識庫初始化失敗，請確認文件是否存在。")
+        return
     retriever = knowledge_base.as_retriever()
 
     # 獲取體重
@@ -129,7 +115,7 @@ def main():
         speak("無法辨識身高，請輸入數字。")
         return
 
-    # 計算 BMI 並給建議
+    # 計算 BMI 並提供分類
     bmi, bmi_category = calculate_bmi(weight, height)
     bmi_suggestion = f"您的 BMI 是 {bmi:.1f}，屬於{bmi_category}範圍。"
     print(bmi_suggestion)
@@ -137,7 +123,7 @@ def main():
 
     # 獲取健身目標
     speak("請告訴我您的健身目標，例如增肌、減脂或提升耐力。")
-    goal = get_chinese_input()
+    goal = get_voice_input()
 
     # 生成健身計畫
     fitness_plan = get_fitness_plan(goal, bmi_category, retriever)
