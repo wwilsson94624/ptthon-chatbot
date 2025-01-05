@@ -133,7 +133,7 @@ def main():
 
     speak("Now, let's enhance your experience with document retrieval.")
 
-    file_path = 'rag1.txt'  # Replace with the path to your document
+    file_path = 'fitness_knowledge.txt'  # Replace with the path to your document
     chunks = load_and_process_documents(file_path)
     db = create_or_load_vector_db(chunks)
 
