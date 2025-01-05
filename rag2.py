@@ -37,7 +37,12 @@ def initialize_knowledge_base(file_path):
 
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     docs = text_splitter.split_documents(data)
-    embeddings = OpenAIEmbeddings()
+    try:
+        embeddings = OpenAIEmbeddings(openai_api_key="your_openai_api_key")
+    except Exception as e:
+        print(f"初始化 OpenAIEmbeddings 時發生錯誤：{e}")
+        return None
+
     knowledge_base = FAISS.from_documents(docs, embeddings)
     return knowledge_base
 
