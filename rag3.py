@@ -145,6 +145,7 @@ def main():
     fitness_plan = get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model)
     speak("以下是您的個人化健身計劃：")
     print(fitness_plan)
+    speak(fitness_plan)
 
 if __name__ == "__main__":
     main()
