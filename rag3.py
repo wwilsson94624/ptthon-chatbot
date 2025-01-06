@@ -72,6 +72,7 @@ def get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model):
 
     llm = OllamaLLM(model="llama3.2")
     template = """
+    如果目標與運動或健身或減重減脂或提升耐力無關就回覆「這目標不在詢問範圍」然後直接跳出來 後面不回覆
     根據以下檢索到的資訊與用戶數據，生成個人化健身計劃：
     {retrieved_info}
     
@@ -79,14 +80,15 @@ def get_fitness_plan_with_rag(goal, weight, height, bmi, db, chat_model):
     - 身高: {height} 公分
     - BMI: {bmi:.1f}
     - 目標: {goal}
-
+    
+    
     提供專業建議，包括運動計劃、推薦的鍛鍊方式及飲食建議。
     """
     prompt = PromptTemplate(input_variables=["retrieved_info", "goal", "weight", "height", "bmi"], template=template)
     response = llm.invoke(prompt.format(retrieved_info=retrieved_info, goal=goal, weight=weight, height=height, bmi=bmi))
     return fitness_plan + response
 
-def load_and_process_documents(file_path):
+def load_and_process_documents(file_path):  
     """載入、切分並處理文件以嵌入"""
     loader = TextLoader(file_path=file_path, encoding="utf8")
     pages = loader.load()
